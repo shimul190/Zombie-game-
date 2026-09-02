@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Zombie Hunter - Jungle War</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Main Game Canvas -->
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- Top HUD Overlay -->
+  <div id="hud">
+    <div class="hud-top">
+      <div class="stat-card health-card">
+        <div class="stat-label">HEALTH</div>
+        <div class="bar-container">
+          <div id="healthFill" class="bar-fill health-fill"></div>
+          <span id="healthText" class="bar-text">100 / 100</span>
+        </div>
+      </div>
+
+      <div class="stat-card info-card">
+        <div class="info-group">
+          <span class="info-label">LVL</span>
+          <span id="levelText" class="info-val">1</span>
+        </div>
+        <div class="info-group">
+          <span class="info-label">WAVE</span>
+          <span id="waveText" class="info-val">1</span>
+        </div>
+        <div class="info-group">
+          <span class="info-label">KILLS</span>
+          <span id="killText" class="info-val">0</span>
+        </div>
+        <div class="info-group">
+          <span class="info-label">COINS</span>
+          <span id="coinText" class="info-val gold">0</span>
+        </div>
+      </div>
+
+      <button id="pauseBtn" class="ui-btn">PAUSE</button>
+    </div>
+
+    <!-- XP Bar -->
+    <div class="xp-container">
+      <div id="xpFill" class="xp-fill"></div>
+      <span id="xpText" class="xp-text">0 / 100 XP</span>
+    </div>
+
+    <!-- Hero & Weapon Stats -->
+    <div class="loadout-bar">
+      <div class="loadout-item">
+        <span class="loadout-label">HERO:</span>
+        <span id="characterName">JUNGLE HUNTER</span>
+        <span class="rank-tag">RANK <span id="characterLevelText">I</span></span>
+      </div>
+      <div class="loadout-divider">|</div>
+      <div class="loadout-item">
+        <span class="loadout-label">GUN:</span>
+        <span id="gunName">HEAVY AUTOCANNON</span>
+        <span class="rank-tag">MK <span id="gunLevelText">I</span></span>
+      </div>
+      <div class="loadout-divider">|</div>
+      <div class="loadout-stats">
+        <span>DMG: <b id="damageText">25</b></span>
+        <span>SPD: <b id="bulletSpeedText">650</b></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Boss Bar -->
+  <div id="bossBar" class="boss-bar-container">
+    <div class="boss-header">
+      <span id="bossName">JUNGLE MUTANT</span>
+      <span id="bossLevel">BOSS LV 1</span>
+    </div>
+    <div class="bar-container boss-health">
+      <div id="bossHealthFill" class="bar-fill boss-fill"></div>
+      <span id="bossHealthText" class="bar-text">1000 / 1000</span>
+    </div>
+  </div>
+
+  <!-- Ability Buttons -->
+  <div class="abilities-bar">
+    <button id="lightningBtn" class="ability-btn">
+      <div id="lightningCooldown" class="cooldown-overlay"></div>
+      <span class="key-bind">Q</span>
+      <span class="ability-name">LIGHTNING</span>
+    </button>
+    <button id="grenadeBtn" class="ability-btn">
+      <div id="grenadeCooldown" class="cooldown-overlay"></div>
+      <span class="key-bind">E</span>
+      <span class="ability-name">GRENADE</span>
+    </button>
+    <button id="shieldBtn" class="ability-btn">
+      <div id="shieldCooldown" class="cooldown-overlay"></div>
+      <span class="key-bind">R</span>
+      <span class="ability-name">SHIELD</span>
+    </button>
+  </div>
+
+  <!-- Touch / Mobile Controls -->
+  <div id="mobileControls">
+    <div class="joystick">
+      <button data-key="w" class="dpad-btn up">▲</button>
+      <div class="dpad-middle">
+        <button data-key="a" class="dpad-btn left">◄</button>
+        <button data-key="s" class="dpad-btn down">▼</button>
+        <button data-key="d" class="dpad-btn right">►</button>
+      </div>
+    </div>
+    <div class="mobile-actions">
+      <button id="mobileShoot" class="action-btn fire">FIRE</button>
+      <button id="mobileLightning" class="action-btn">Q</button>
+      <button id="mobileGrenade" class="action-btn">E</button>
+      <button id="mobileShield" class="action-btn">R</button>
+    </div>
+  </div>
+
+  <!-- Game Over Screen Overlay -->
+  <div id="message" class="overlay hidden">
+    <div class="modal">
+      <h1 class="game-over-title">YOU DIED</h1>
+      <p id="messageText">You survived until Level 1 with 0 kills!</p>
+      <button id="restartBtn" class="restart-btn">PLAY AGAIN</button>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
