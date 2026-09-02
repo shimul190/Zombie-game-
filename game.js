@@ -19,6 +19,8 @@ window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
 
 /* Game State */
+const SCORE_HISTORY_KEY = "zombieHunterScoreHistory";
+
 const game = {
   running: true,
   paused: false,
@@ -153,6 +155,189 @@ function random(min, max) { return Math.random() * (max - min) + min; }
 function distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 function romanize(num) { return ["I","II","III","IV","V","VI"][num - 1] || num; }
 
+const audio = {
+  ctx: null,
+  unlocked: false,
+  master: null
+};
+
+function ensureAudio() {
+  if (!audio.ctx) {
+    const AudioCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtor) return;
+
+    audio.ctx = new AudioCtor();
+    audio.master = audio.ctx.createGain();
+    audio.master.gain.value = 0.9;
+    audio.master.connect(audio.ctx.destination);
+  }
+
+  if (audio.ctx.state === "suspended") {
+    audio.ctx.resume();
+  }
+
+  audio.unlocked = true;
+}
+
+function playTone({ frequency = 440, duration = 0.12, type = "square", volume = 0.16, slide = 0, delay = 0, attack = 0.01, detune = 0 }) {
+  if (!audio.ctx || !audio.unlocked || !audio.master) return;
+
+  const startAt = audio.ctx.currentTime + delay;
+  const osc = audio.ctx.createOscillator();
+  const gain = audio.ctx.createGain();
+
+  osc.type = type;
+  osc.frequency.setValueAtTime(frequency, startAt);
+  osc.detune.setValueAtTime(detune, startAt);
+  if (slide !== 0) {
+    osc.frequency.linearRampToValueAtTime(Math.max(30, frequency + slide), startAt + duration);
+  }
+
+  gain.gain.setValueAtTime(0.0001, startAt);
+  gain.gain.exponentialRampToValueAtTime(volume, startAt + attack);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+
+  osc.connect(gain);
+  gain.connect(audio.master);
+  osc.start(startAt);
+  osc.stop(startAt + duration + 0.04);
+}
+
+function playNoiseBurst({ duration = 0.12, volume = 0.12, delay = 0, highpass = 300, lowpass = 5000, attack = 0.01 }) {
+  if (!audio.ctx || !audio.unlocked || !audio.master) return;
+
+  const startAt = audio.ctx.currentTime + delay;
+  const buffer = audio.ctx.createBuffer(1, Math.ceil(audio.ctx.sampleRate * duration), audio.ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+
+  for (let i = 0; i < data.length; i++) {
+    const envelope = 1 - (i / data.length);
+    data[i] = (Math.random() * 2 - 1) * envelope;
+  }
+
+  const source = audio.ctx.createBufferSource();
+  const filter = audio.ctx.createBiquadFilter();
+  const gain = audio.ctx.createGain();
+
+  filter.type = "highpass";
+  filter.frequency.setValueAtTime(highpass, startAt);
+  filter.Q.value = 0.8;
+
+  gain.gain.setValueAtTime(0.0001, startAt);
+  gain.gain.exponentialRampToValueAtTime(volume, startAt + attack);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+
+  source.buffer = buffer;
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(audio.master);
+  source.start(startAt);
+  source.stop(startAt + duration + 0.03);
+}
+
+function playGunShot(gunLevel = 1) {
+  ensureAudio();
+  const profiles = {
+    1: { base: 120, slide: 140, noise: 0.08, tone: 0.12, duration: 0.1, type: "square" },
+    2: { base: 90, slide: 200, noise: 0.11, tone: 0.14, duration: 0.14, type: "sawtooth" },
+    3: { base: 80, slide: 180, noise: 0.14, tone: 0.18, duration: 0.12, type: "sawtooth" },
+    4: { base: 60, slide: 150, noise: 0.15, tone: 0.16, duration: 0.16, type: "triangle" },
+    5: { base: 45, slide: 120, noise: 0.18, tone: 0.2, duration: 0.18, type: "sawtooth" },
+    6: { base: 35, slide: 100, noise: 0.22, tone: 0.24, duration: 0.2, type: "sawtooth" }
+  };
+
+  const config = profiles[gunLevel] || profiles[1];
+  playTone({ frequency: config.base, duration: config.duration, type: config.type, volume: config.tone, slide: config.slide, attack: 0.005, detune: -4 });
+  playNoiseBurst({ duration: config.duration * 1.2, volume: config.noise, delay: 0.01, highpass: 400, lowpass: 7000, attack: 0.006 });
+}
+
+function playHitSound() {
+  ensureAudio();
+  playTone({ frequency: 180, duration: 0.05, type: "triangle", volume: 0.11, slide: -35, attack: 0.004 });
+  playNoiseBurst({ duration: 0.07, volume: 0.07, delay: 0.01, highpass: 700, attack: 0.002 });
+}
+
+function playExplosionSound(isBoss = false) {
+  ensureAudio();
+  playTone({ frequency: isBoss ? 50 : 100, duration: isBoss ? 0.45 : 0.2, type: "sawtooth", volume: isBoss ? 0.22 : 0.13, slide: isBoss ? 220 : 160, attack: 0.01 });
+  playNoiseBurst({ duration: isBoss ? 0.55 : 0.22, volume: isBoss ? 0.22 : 0.12, delay: 0.02, highpass: 160, attack: 0.004 });
+  if (isBoss) {
+    playTone({ frequency: 30, duration: 0.6, type: "square", volume: 0.15, slide: 90, delay: 0.08, attack: 0.03 });
+  }
+}
+
+function playLevelUpSound() {
+  ensureAudio();
+  playTone({ frequency: 440, duration: 0.12, type: "triangle", volume: 0.18, slide: 80, attack: 0.008 });
+  playTone({ frequency: 660, duration: 0.16, type: "triangle", volume: 0.2, slide: 120, delay: 0.07, attack: 0.008 });
+  playTone({ frequency: 880, duration: 0.2, type: "triangle", volume: 0.18, slide: 140, delay: 0.12, attack: 0.01 });
+}
+
+function playAbilitySound(frequency, type = "square", volume = 0.18) {
+  ensureAudio();
+  playTone({ frequency, duration: 0.22, type, volume, slide: 180, attack: 0.005 });
+  playTone({ frequency: frequency * 1.5, duration: 0.2, type: "triangle", volume: volume * 0.9, slide: 160, delay: 0.04, attack: 0.005 });
+  playNoiseBurst({ duration: 0.18, volume: volume * 0.6, delay: 0.02, highpass: 250, attack: 0.004 });
+}
+
+function playGameOverSound() {
+  ensureAudio();
+  playTone({ frequency: 220, duration: 0.2, type: "sawtooth", volume: 0.2, slide: -70, attack: 0.01 });
+  playTone({ frequency: 140, duration: 0.34, type: "sawtooth", volume: 0.18, slide: -120, delay: 0.1, attack: 0.02 });
+  playNoiseBurst({ duration: 0.3, volume: 0.14, delay: 0.05, highpass: 180, attack: 0.01 });
+}
+
+function playShieldSound() {
+  ensureAudio();
+  playTone({ frequency: 330, duration: 0.18, type: "triangle", volume: 0.15, slide: 100, attack: 0.01 });
+  playTone({ frequency: 520, duration: 0.22, type: "sine", volume: 0.12, slide: 80, delay: 0.06, attack: 0.01 });
+}
+
+function playZombieSound(type = "normal", variant = "groan") {
+  ensureAudio();
+
+  const profiles = {
+    normal: {
+      groan: { base: 90, slide: -40, duration: 0.25, type: "triangle", volume: 0.12 },
+      death: { base: 60, slide: -90, duration: 0.18, type: "sawtooth", volume: 0.12 },
+      attack: { base: 120, slide: -20, duration: 0.12, type: "square", volume: 0.08 }
+    },
+    fast: {
+      groan: { base: 180, slide: -60, duration: 0.2, type: "triangle", volume: 0.1 },
+      death: { base: 150, slide: -110, duration: 0.16, type: "sawtooth", volume: 0.1 },
+      attack: { base: 220, slide: -50, duration: 0.1, type: "square", volume: 0.08 }
+    },
+    tank: {
+      groan: { base: 55, slide: -25, duration: 0.35, type: "sawtooth", volume: 0.14 },
+      death: { base: 35, slide: -110, duration: 0.28, type: "square", volume: 0.15 },
+      attack: { base: 70, slide: -15, duration: 0.15, type: "triangle", volume: 0.1 }
+    },
+    boss: {
+      groan: { base: 36, slide: -15, duration: 0.52, type: "sawtooth", volume: 0.2 },
+      death: { base: 25, slide: -160, duration: 0.5, type: "square", volume: 0.22 },
+      attack: { base: 45, slide: -35, duration: 0.2, type: "triangle", volume: 0.18 },
+      spawn: { base: 52, slide: 110, duration: 0.7, type: "sawtooth", volume: 0.22 }
+    }
+  };
+
+  const config = profiles[type]?.[variant] || profiles.normal.groan;
+  playTone({
+    frequency: config.base,
+    duration: config.duration,
+    type: config.type,
+    volume: config.volume,
+    slide: config.slide,
+    attack: variant === "death" ? 0.02 : 0.01
+  });
+
+  if (variant !== "death") {
+    playNoiseBurst({ duration: config.duration * 0.8, volume: config.volume * 0.6, delay: 0.03, highpass: type === "boss" ? 40 : 120, attack: 0.01 });
+  }
+}
+
+window.addEventListener("pointerdown", ensureAudio, { once: true });
+window.addEventListener("keydown", ensureAudio, { once: true });
+
 function createExplosion(x, y, color, count = 20) {
   for (let i = 0; i < count; i++) {
     const angle = random(0, Math.PI * 2);
@@ -228,6 +413,7 @@ function spawnBoss() {
   const boss = zombies[zombies.length - 1];
   boss.health *= 1 + game.level * 0.2;
   boss.maxHealth = boss.health;
+  playZombieSound("boss", "spawn");
 
   showBossWarning();
   updateBossBar();
@@ -287,12 +473,15 @@ function shoot() {
     });
   }
 
+  playGunShot(player.gunLevel);
   game.shake = Math.min(game.shake + 3, 9);
 }
 
 function useLightning() {
   if (player.lightningCooldown > 0) return;
   player.lightningCooldown = 12;
+
+  playAbilitySound(520, "sawtooth", 0.07);
 
   zombies.forEach(z => {
     // Kill all zombies except boss
@@ -331,7 +520,9 @@ function useGrenade() {
     life: 0.4
   });
 
+  playAbilitySound(180, "sawtooth", 0.06);
   createExplosion(targetX, targetY, "#ff6b00", 35);
+  playExplosionSound(false);
   game.shake = 15;
 }
 
@@ -340,6 +531,34 @@ function useShield() {
   player.shield = true;
   player.shieldTimer = 6;
   player.shieldCooldown = 18;
+  playShieldSound();
+}
+
+function getScoreHistory() {
+  try {
+    const saved = localStorage.getItem(SCORE_HISTORY_KEY);
+    const parsed = saved ? JSON.parse(saved) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveScoreHistory(history) {
+  try {
+    localStorage.setItem(SCORE_HISTORY_KEY, JSON.stringify(history.slice(-25)));
+  } catch {
+    // Ignore storage errors in restricted browsers.
+  }
+}
+
+function getHighScore() {
+  const history = getScoreHistory();
+  return history.reduce((best, entry) => Math.max(best, Number(entry.score) || 0), 0);
+}
+
+function recalculateScore() {
+  game.score = Math.floor(game.kills * 120 + game.coins * 35 + (game.level - 1) * 250 + game.xp);
 }
 
 function addXP(amount) {
@@ -355,12 +574,14 @@ function addXP(amount) {
     player.maxHealth += 15;
     player.health = player.maxHealth;
 
+    playLevelUpSound();
     showLevelIndicator();
 
     if (game.level % 3 === 0) {
       spawnBoss();
     }
   }
+  recalculateScore();
   updateUI();
 }
 
@@ -378,6 +599,7 @@ function showLevelIndicator() {
 }
 
 function updateUI() {
+  recalculateScore();
   document.getElementById("healthText").innerText = `${Math.ceil(Math.max(0, player.health))} / ${player.maxHealth}`;
   document.getElementById("healthFill").style.width = `${Math.max(0, (player.health / player.maxHealth) * 100)}%`;
   document.getElementById("levelText").innerText = game.level;
@@ -412,7 +634,20 @@ function togglePause() { game.paused = !game.paused; }
 
 function gameOver() {
   game.running = false;
-  document.getElementById("messageText").innerText = `You survived until Level ${game.level} with ${game.kills} kills!`;
+  recalculateScore();
+
+  const history = getScoreHistory();
+  history.push({
+    score: game.score,
+    kills: game.kills,
+    level: game.level,
+    date: new Date().toISOString()
+  });
+  saveScoreHistory(history);
+
+  const bestScore = getHighScore();
+  playGameOverSound();
+  document.getElementById("messageText").innerText = `Score: ${game.score} | Kills: ${game.kills} | Level: ${game.level}\nHigh Score: ${bestScore}`;
   document.getElementById("message").classList.remove("hidden");
 }
 
@@ -424,6 +659,7 @@ function restartGame() {
   game.xpNeeded = 100;
   game.kills = 0;
   game.coins = 0;
+  game.score = 0;
   game.wave = 1;
   game.bossAlive = false;
   game.bossDead = false;
@@ -509,6 +745,8 @@ function update(dt) {
     if (distance(player, z) < player.radius + z.width) {
       if (!player.shield) {
         player.health -= z.damage * dt;
+        playHitSound();
+        playZombieSound(z.type, "attack");
         game.shake = Math.min(game.shake + 1, 6);
         if (player.health <= 0) gameOver();
       }
@@ -533,6 +771,8 @@ function update(dt) {
 
         if (z.health <= 0) {
           createExplosion(z.x, z.y, z.color, z.isBoss ? 50 : 18);
+          playExplosionSound(z.isBoss);
+          playZombieSound(z.type, "death");
           addXP(zombieTypes[z.type].xp);
           game.kills++;
           game.coins += zombieTypes[z.type].coins;
