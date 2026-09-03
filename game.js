@@ -22,7 +22,7 @@ resizeCanvas();
 const SCORE_HISTORY_KEY = "zombieHunterScoreHistory";
 
 const game = {
-  running: true,
+  running: false,
   paused: false,
   level: 1,
   xp: 0,
@@ -37,8 +37,27 @@ const game = {
   bossDead: false,
   backgroundTheme: "jungle",
   bossKillCount: 0,
-  themes: ["jungle", "dark", "city", "town", "ocean", "hill", "sky", "volcanic"],
+  mode: "medium",
+  levelThemes: [
+    { id: "jungle", name: "Overgrown Dense Jungle" },
+    { id: "wheat", name: "Golden Sunlit Wheat Field" },
+    { id: "city", name: "Cyberpunk Neon Alley" },
+    { id: "dark", name: "Overgrown Post-Apocalyptic City" },
+    { id: "hill", name: "Foggy Alpine Mountain Forest" },
+    { id: "desert", name: "Arid Desert Sand Dunes" },
+    { id: "toxic", name: "Bioluminescent Alien Forest" },
+    { id: "ocean", name: "Stormy Coastal Cliffs" },
+    { id: "ruins", name: "Forgotten Ancient Stone Ruins" },
+    { id: "sky", name: "Minimalist Fluid Gradient" }
+  ],
   mouse: { x: W / 2, y: H / 2, down: false }
+};
+
+const modeSettings = {
+  beginner: { label: "BEGINNER", description: "Slower enemies, lighter damage", spawnMultiplier: 1.35, enemyMultiplier: 0.7, maxZombies: 30 },
+  easy: { label: "EASY", description: "A calm hunt to learn the basics", spawnMultiplier: 1.15, enemyMultiplier: 0.85, maxZombies: 36 },
+  medium: { label: "MEDIUM", description: "The standard survival challenge", spawnMultiplier: 1, enemyMultiplier: 1, maxZombies: 45 },
+  hard: { label: "HARD", description: "Fast enemies and little room for error", spawnMultiplier: 0.75, enemyMultiplier: 1.25, maxZombies: 55 }
 };
 
 /* Player Config */
@@ -102,7 +121,7 @@ const keys = {};
 
 window.addEventListener("keydown", e => {
   keys[e.key.toLowerCase()] = true;
-  if (e.key === " ") { e.preventDefault(); shoot(); }
+  if ((e.key === " " || e.key === "Space") && !e.repeat) { e.preventDefault(); togglePause(); }
   if (e.key.toLowerCase() === "q") useLightning();
   if (e.key.toLowerCase() === "e") useGrenade();
   if (e.key.toLowerCase() === "r") useShield();
@@ -144,6 +163,20 @@ document.getElementById("grenadeBtn")?.addEventListener("click", useGrenade);
 document.getElementById("shieldBtn")?.addEventListener("click", useShield);
 document.getElementById("pauseBtn")?.addEventListener("click", togglePause);
 document.getElementById("restartBtn")?.addEventListener("click", restartGame);
+document.getElementById("homeBtn")?.addEventListener("click", showHomeScreen);
+document.querySelectorAll(".mode-btn").forEach(button => {
+  button.addEventListener("click", () => selectMode(button.dataset.mode));
+});
+document.getElementById("startGameBtn")?.addEventListener("click", startSelectedMode);
+document.getElementById("backToModesBtn")?.addEventListener("click", showModeSelection);
+document.getElementById("loginBtn")?.addEventListener("click", () => showAuthScreen("loginScreen"));
+document.getElementById("signInBtn")?.addEventListener("click", () => showAuthScreen("signInScreen"));
+document.querySelectorAll("[data-auth-back]").forEach(button => {
+  button.addEventListener("click", showHomeScreen);
+});
+document.querySelectorAll(".auth-form").forEach(form => {
+  form.addEventListener("submit", event => event.preventDefault());
+});
 
 document.getElementById("mobileShoot")?.addEventListener("touchstart", e => { e.preventDefault(); shoot(); });
 document.getElementById("mobileLightning")?.addEventListener("touchstart", e => { e.preventDefault(); useLightning(); });
@@ -384,7 +417,8 @@ function spawnZombie(type = null) {
 
   const data = zombieTypes[type];
   const mult = 1 + (game.level - 1) * 0.15;
-  const hp = data.health * mult;
+  const mode = modeSettings[game.mode];
+  const hp = data.health * mult * mode.enemyMultiplier;
 
   zombies.push({
     type,
@@ -394,8 +428,8 @@ function spawnZombie(type = null) {
     radius: data.height / 2,
     health: hp,
     maxHealth: hp,
-    speed: data.speed * (1 + (game.level - 1) * 0.02),
-    damage: data.damage * mult,
+    speed: data.speed * (1 + (game.level - 1) * 0.02) * mode.enemyMultiplier,
+    damage: data.damage * mult * mode.enemyMultiplier,
     color: data.color,
     skinColor: data.skinColor,
     angle: 0,
@@ -571,8 +605,11 @@ function addXP(amount) {
     player.characterLevel = Math.min(6, Math.floor((game.level - 1) / 2) + 1);
     player.gunLevel = Math.min(6, Math.floor((game.level - 1) / 2) + 1);
     player.damage = 25 + (game.level - 1) * 12;
+    player.bulletSpeed = 650 + (game.level - 1) * 50;
     player.maxHealth += 15;
     player.health = player.maxHealth;
+
+    game.backgroundTheme = game.levelThemes[(game.level - 1) % game.levelThemes.length].id;
 
     playLevelUpSound();
     showLevelIndicator();
@@ -630,7 +667,11 @@ function updateCooldownUI(id, current, max) {
   if (el) el.style.height = `${Math.max(0, (current / max) * 100)}%`;
 }
 
-function togglePause() { game.paused = !game.paused; }
+function togglePause() {
+  game.paused = !game.paused;
+  const pauseBtn = document.getElementById("pauseBtn");
+  if (pauseBtn) pauseBtn.innerText = game.paused ? "RESUME" : "PAUSE";
+}
 
 function gameOver() {
   game.running = false;
@@ -647,7 +688,10 @@ function gameOver() {
 
   const bestScore = getHighScore();
   playGameOverSound();
-  document.getElementById("messageText").innerText = `Score: ${game.score} | Kills: ${game.kills} | Level: ${game.level}\nHigh Score: ${bestScore}`;
+  document.getElementById("scoreResult").innerText = game.score;
+  document.getElementById("killsResult").innerText = game.kills;
+  document.getElementById("levelResult").innerText = game.level;
+  document.getElementById("highScoreResult").innerText = bestScore;
   document.getElementById("message").classList.remove("hidden");
 }
 
@@ -664,11 +708,12 @@ function restartGame() {
   game.bossAlive = false;
   game.bossDead = false;
   game.bossKillCount = 0;
-  game.backgroundTheme = "jungle";
+  game.backgroundTheme = game.levelThemes[0].id;
 
   player.health = 100;
   player.maxHealth = 100;
   player.damage = 25;
+  player.bulletSpeed = 650;
   player.gunLevel = 1;
   player.characterLevel = 1;
   player.x = W / 2;
@@ -682,6 +727,45 @@ function restartGame() {
   document.getElementById("message").classList.add("hidden");
   updateUI();
   updateBossBar();
+}
+
+function selectMode(mode) {
+  if (!modeSettings[mode]) return;
+  game.mode = mode;
+  const settings = modeSettings[mode];
+  document.getElementById("selectedModeTitle").innerText = `${settings.label} MODE`;
+  document.getElementById("selectedModeDescription").innerText = settings.description;
+  document.getElementById("modeSelection").classList.add("hidden");
+  document.getElementById("modeActions").classList.remove("hidden");
+}
+
+function showModeSelection() {
+  document.getElementById("modeActions").classList.add("hidden");
+  document.getElementById("modeSelection").classList.remove("hidden");
+}
+
+function showHomeScreen() {
+  game.running = false;
+  game.paused = false;
+  document.getElementById("message").classList.add("hidden");
+  document.getElementById("modeActions").classList.add("hidden");
+  document.getElementById("modeSelection").classList.remove("hidden");
+  document.getElementById("loginScreen").classList.add("hidden");
+  document.getElementById("signInScreen").classList.add("hidden");
+}
+
+function showAuthScreen(screenId) {
+  game.running = false;
+  document.getElementById("modeSelection").classList.add("hidden");
+  document.getElementById("modeActions").classList.add("hidden");
+  document.getElementById("loginScreen").classList.add("hidden");
+  document.getElementById("signInScreen").classList.add("hidden");
+  document.getElementById(screenId).classList.remove("hidden");
+}
+
+function startSelectedMode() {
+  document.getElementById("modeActions").classList.add("hidden");
+  restartGame();
 }
 
 function update(dt) {
@@ -716,10 +800,10 @@ function update(dt) {
   }
 
   game.spawnTimer += dt;
-  const currentSpawnRate = Math.max(0.4, 1.8 - game.level * 0.1);
+  const currentSpawnRate = Math.max(0.4, (1.8 - game.level * 0.1) * modeSettings[game.mode].spawnMultiplier);
   if (game.spawnTimer >= currentSpawnRate) {
     game.spawnTimer = 0;
-    if (zombies.length < 45) spawnZombie();
+    if (zombies.length < modeSettings[game.mode].maxZombies) spawnZombie();
   }
 
   for (let i = bullets.length - 1; i >= 0; i--) {
@@ -781,9 +865,6 @@ function update(dt) {
             game.bossAlive = false;
             game.bossDead = true;
             game.bossKillCount++;
-            // Cycle through themes: jungle -> dark -> city -> town -> ocean -> hill -> sky -> volcanic -> jungle
-            const themeIndex = (game.bossKillCount) % game.themes.length;
-            game.backgroundTheme = game.themes[themeIndex];
             upgradeBossGun();
             updateBossBar();
           }
@@ -1022,6 +1103,11 @@ function drawZombie(ctx, z) {
 }
 
 function drawEnvironment() {
+  const levelTheme = game.levelThemes[(game.level - 1) % game.levelThemes.length];
+  if (levelTheme && game.backgroundTheme !== levelTheme.id) {
+    game.backgroundTheme = levelTheme.id;
+  }
+
   if (game.backgroundTheme === "jungle") {
     // Original jungle theme - Green and natural
     ctx.fillStyle = "#09170d";
@@ -1049,6 +1135,26 @@ function drawEnvironment() {
       ctx.arc(t.x, t.y, t.size, 0, Math.PI * 2);
       ctx.fill();
     });
+  } else if (game.backgroundTheme === "wheat") {
+    ctx.fillStyle = "#d9b84a";
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#f8d878";
+    ctx.fillRect(0, 0, W, H * 0.58);
+    ctx.fillStyle = "#c59527";
+    ctx.fillRect(0, H * 0.58, W, H * 0.42);
+
+    ctx.strokeStyle = "rgba(255, 238, 148, 0.75)";
+    ctx.lineWidth = 3;
+    for (let x = -20; x < W + 20; x += 18) {
+      ctx.beginPath();
+      ctx.moveTo(x, H);
+      ctx.lineTo(x + 25, H * 0.52);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "rgba(255, 248, 194, 0.5)";
+    ctx.beginPath();
+    ctx.arc(W * 0.82, H * 0.18, 52, 0, Math.PI * 2);
+    ctx.fill();
   } else if (game.backgroundTheme === "dark") {
     // Dark forest theme - ominous
     ctx.fillStyle = "#0a0a0a";
@@ -1200,6 +1306,49 @@ function drawEnvironment() {
       ctx.arc(t.x, t.y, t.size, 0, Math.PI * 2);
       ctx.fill();
     });
+  } else if (game.backgroundTheme === "desert") {
+    const desertGradient = ctx.createLinearGradient(0, 0, 0, H);
+    desertGradient.addColorStop(0, "#f7c873");
+    desertGradient.addColorStop(0.55, "#e89b45");
+    desertGradient.addColorStop(1, "#b95f2d");
+    ctx.fillStyle = desertGradient;
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "rgba(255, 221, 135, 0.55)";
+    for (let index = 0; index < 4; index++) {
+      ctx.beginPath();
+      ctx.ellipse(W * (0.1 + index * 0.32), H * (0.7 + (index % 2) * 0.12), W * 0.38, H * 0.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.strokeStyle = "rgba(154, 73, 35, 0.28)";
+    ctx.lineWidth = 2;
+    for (let y = H * 0.65; y < H; y += 28) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.quadraticCurveTo(W / 2, y - 18, W, y + 8);
+      ctx.stroke();
+    }
+  } else if (game.backgroundTheme === "ruins") {
+    ctx.fillStyle = "#273238";
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#59675c";
+    ctx.fillRect(0, H * 0.68, W, H * 0.32);
+    ctx.strokeStyle = "rgba(202, 188, 133, 0.3)";
+    ctx.lineWidth = 3;
+    for (let x = 40; x < W; x += 130) {
+      ctx.fillStyle = "#8b8463";
+      ctx.fillRect(x, H * 0.3 + (x % 3) * 10, 58, H * 0.42);
+      ctx.fillStyle = "#4d554b";
+      ctx.fillRect(x + 12, H * 0.37, 12, 70);
+      ctx.fillRect(x + 35, H * 0.37, 12, 70);
+      ctx.strokeRect(x - 8, H * 0.27 + (x % 3) * 10, 74, 18);
+    }
+    ctx.fillStyle = "rgba(162, 198, 112, 0.35)";
+    trees.slice(0, 18).forEach(t => {
+      ctx.fillRect(t.x, H * 0.58, 5, H * 0.18);
+      ctx.beginPath();
+      ctx.arc(t.x, H * 0.55, 18, 0, Math.PI * 2);
+      ctx.fill();
+    });
   } else if (game.backgroundTheme === "sky") {
     // Sky theme - Clouds and atmosphere
     ctx.fillStyle = "linear-gradient(180deg, #87ceeb 0%, #e0f6ff 100%)";
@@ -1231,6 +1380,39 @@ function drawEnvironment() {
       ctx.moveTo(x, 0);
       ctx.lineTo(x, H);
       ctx.stroke();
+    }
+  } else if (game.backgroundTheme === "toxic") {
+    ctx.fillStyle = "#061b1a";
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.strokeStyle = "rgba(74, 222, 128, 0.16)";
+    ctx.lineWidth = 1;
+    const step = 70;
+    for (let x = 0; x < W; x += step) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, H);
+      ctx.stroke();
+    }
+    for (let y = 0; y < H; y += step) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y);
+      ctx.stroke();
+    }
+
+    trees.forEach((t, index) => {
+      ctx.fillStyle = index % 2 === 0 ? "rgba(34, 197, 94, 0.18)" : "rgba(250, 204, 21, 0.12)";
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, t.size * 0.8, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    ctx.fillStyle = "rgba(163, 230, 53, 0.12)";
+    for (let index = 0; index < 5; index++) {
+      ctx.beginPath();
+      ctx.arc((index * 260 + 100) % W, H - 80 - (index % 2) * 70, 90, 0, Math.PI * 2);
+      ctx.fill();
     }
   } else if (game.backgroundTheme === "volcanic") {
     // Volcanic theme - Lava and fire

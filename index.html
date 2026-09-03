@@ -124,8 +124,77 @@
   <div id="message" class="overlay hidden">
     <div class="modal">
       <h1 class="game-over-title">YOU DIED</h1>
-      <p id="messageText">You survived until Level 1 with 0 kills!</p>
-      <button id="restartBtn" class="restart-btn">PLAY AGAIN</button>
+      <div class="results-grid">
+        <div class="result-item"><span>SCORE</span><strong id="scoreResult">0</strong></div>
+        <div class="result-item"><span>KILLS</span><strong id="killsResult">0</strong></div>
+        <div class="result-item"><span>LEVEL</span><strong id="levelResult">1</strong></div>
+        <div class="result-item"><span>HIGH SCORE</span><strong id="highScoreResult">0</strong></div>
+      </div>
+      <div class="game-over-actions">
+        <button id="restartBtn" class="restart-btn">PLAY AGAIN</button>
+        <button id="homeBtn" class="home-btn">BACK TO HOME</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modeSelection" class="overlay">
+    <div class="mode-panel">
+      <div class="auth-links">
+        <button id="loginBtn" class="auth-link">LOGIN</button>
+        <button id="signInBtn" class="auth-link">SIGN IN</button>
+      </div>
+      <p class="screen-kicker">ZOMBIE HUNTER</p>
+      <h1 class="screen-title">SELECT MODE</h1>
+      <div class="mode-grid">
+        <button class="mode-btn" data-mode="beginner"><strong>BEGINNER</strong><span>Slower enemies, lighter damage</span></button>
+        <button class="mode-btn" data-mode="easy"><strong>EASY</strong><span>A calm hunt to learn the basics</span></button>
+        <button class="mode-btn" data-mode="medium"><strong>MEDIUM</strong><span>The standard survival challenge</span></button>
+        <button class="mode-btn" data-mode="hard"><strong>HARD</strong><span>Fast enemies and little room for error</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modeActions" class="overlay hidden">
+    <div class="mode-panel mode-actions-panel">
+      <p class="screen-kicker">MODE READY</p>
+      <h1 id="selectedModeTitle" class="screen-title">BEGINNER MODE</h1>
+      <p id="selectedModeDescription" class="mode-description"></p>
+      <div class="mode-actions">
+        <button id="startGameBtn" class="start-btn">START GAME</button>
+        <button id="backToModesBtn" class="back-btn">BACK</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="loginScreen" class="overlay hidden">
+    <div class="mode-panel auth-panel">
+      <p class="screen-kicker">WELCOME BACK</p>
+      <h1 class="screen-title">LOGIN</h1>
+      <form class="auth-form" id="loginForm">
+        <label for="loginEmail">EMAIL</label>
+        <input id="loginEmail" type="email" placeholder="you@example.com" required />
+        <label for="loginPassword">PASSWORD</label>
+        <input id="loginPassword" type="password" placeholder="Enter your password" required />
+        <button class="start-btn" type="submit">LOGIN</button>
+      </form>
+      <button class="back-btn auth-back-btn" data-auth-back>BACK TO HOME</button>
+    </div>
+  </div>
+
+  <div id="signInScreen" class="overlay hidden">
+    <div class="mode-panel auth-panel">
+      <p class="screen-kicker">JOIN THE HUNT</p>
+      <h1 class="screen-title">SIGN IN</h1>
+      <form class="auth-form" id="signInForm">
+        <label for="signInName">PLAYER NAME</label>
+        <input id="signInName" type="text" placeholder="Enter your player name" required />
+        <label for="signInEmail">EMAIL</label>
+        <input id="signInEmail" type="email" placeholder="you@example.com" required />
+        <label for="signInPassword">PASSWORD</label>
+        <input id="signInPassword" type="password" placeholder="Create a password" required />
+        <button class="start-btn" type="submit">SIGN IN</button>
+      </form>
+      <button class="back-btn auth-back-btn" data-auth-back>BACK TO HOME</button>
     </div>
   </div>
 
